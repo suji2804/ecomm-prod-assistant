@@ -67,8 +67,8 @@ class Retriever:
     
 if __name__=='__main__':
     retriever_obj = Retriever()
-    user_query = "what is artificial intelligence?"
+    user_query = "what is my name?"
     results = retriever_obj.call_retriever(user_query)
-
+    
     for idx, doc in enumerate(results, 1):
         print(f"Result {idx}: {doc.page_content}\nMetadata: {doc.metadata}\n")

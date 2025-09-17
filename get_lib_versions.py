@@ -4,6 +4,7 @@ packages = [
     "python-dotenv",
     "langchain_core",
     "streamlit"
+    "langgraph"
 ]
 for pkg in packages:
     try:
