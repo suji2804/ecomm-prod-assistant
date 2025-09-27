@@ -56,8 +56,6 @@ class AgenticRAG:
             response = chain.invoke({"question": last_message})
             return {"messages": [HumanMessage(content=response)]}
 
-
-
     def _vector_retriever(self, state: AgentState):
         print("--- RETRIEVER (MCP) ---")
         query = state["messages"][-1].content
@@ -143,11 +141,10 @@ class AgenticRAG:
              "rewriter": "Rewriter"},
         )
         workflow.add_edge("Generator", END)
-
-        # New path: Rewriter → WebSearch → END
+        
         workflow.add_edge("Rewriter", "WebSearch")
         
-        workflow.add_edge("WebSearch", "Assistant")
+        workflow.add_edge("WebSearch", "Generator")
         
         return workflow
 
@@ -161,5 +158,5 @@ class AgenticRAG:
 
 if __name__ == "__main__":
     rag_agent = AgenticRAG()
-    answer = rag_agent.run("What is the price of iPhone 15?")
+    answer = rag_agent.run("What is the price of iPhone 16?")
     print("\nFinal Answer:\n", answer)
