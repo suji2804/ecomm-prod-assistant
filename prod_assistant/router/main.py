@@ -1,4 +1,3 @@
-
 import uvicorn
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
@@ -30,6 +29,7 @@ async def index(request: Request):
 async def chat(msg: str = Form(...)):
     """Call the Agentic RAG workflow."""
     rag_agent = AgenticRAG()
-    answer = rag_agent.run(msg)   # run() already returns final answer string
+    await rag_agent.async_init()
+    answer = await rag_agent.run(msg)   # run() already returns final answer string
     print(f"Agentic Response: {answer}")
     return answer

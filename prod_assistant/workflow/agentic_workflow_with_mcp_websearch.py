@@ -34,13 +34,15 @@ class AgenticRAG:
                 "transport": "stdio"
             }
         })
-        # Load MCP tools
-        self.mcp_tools = asyncio.run(self.mcp_client.get_tools())
+        # Load MCP tools asynchronously
+        self.mcp_tools = None  # Will be loaded asynchronously
 
         self.workflow = self._build_workflow()
         self.app = self.workflow.compile(checkpointer=self.checkpointer)
 
-    # ---------- Nodes ----------
+    async def async_init(self):
+        self.mcp_tools = await self.mcp_client.get_tools()
+
     def _ai_assistant(self, state: AgentState):
         print("--- CALL ASSISTANT ---")
         messages = state["messages"]
@@ -56,19 +58,19 @@ class AgenticRAG:
             response = chain.invoke({"question": last_message})
             return {"messages": [HumanMessage(content=response)]}
 
-    def _vector_retriever(self, state: AgentState):
+    async def _vector_retriever(self, state: AgentState):
         print("--- RETRIEVER (MCP) ---")
         query = state["messages"][-1].content
         tool = next(t for t in self.mcp_tools if t.name == "get_product_info")
-        result = asyncio.run(tool.ainvoke({"query": query}))
+        result = await tool.ainvoke({"query": query})
         context = result if result else "No data"
         return {"messages": [HumanMessage(content=context)]}
 
-    def _web_search(self, state: AgentState):
+    async def _web_search(self, state: AgentState):
         print("--- WEB SEARCH (MCP) ---")
         query = state["messages"][-1].content
         tool = next(t for t in self.mcp_tools if t.name == "web_search")
-        result = asyncio.run(tool.ainvoke({"query": query}))
+        result = await tool.ainvoke({"query": query})
         context = result if result else "No data from web"
         return {"messages": [HumanMessage(content=context)]}
 
@@ -108,55 +110,44 @@ class AgenticRAG:
         new_q = chain.invoke({"question": question})
         return {"messages": [HumanMessage(content=new_q.strip())]}
 
-
-    # ---------- Build Workflow ----------
     def _build_workflow(self):
         workflow = StateGraph(self.AgentState)
         workflow.add_node("Assistant", self._ai_assistant)
-        workflow.add_node("Retriever", self._vector_retriever)
+        workflow.add_node("Retriever", self._vector_retriever, is_async=True)
         workflow.add_node("Generator", self._generate)
         workflow.add_node("Rewriter", self._rewrite)
-        workflow.add_node("WebSearch", self._web_search)
-
+        workflow.add_node("WebSearch", self._web_search, is_async=True)
         workflow.add_edge(START, "Assistant")
         workflow.add_conditional_edges(
             "Assistant",
-            
-            
             lambda state: "Retriever" if "TOOL" in state["messages"][-1].content else END,
-            
             {
                 "Retriever": "Retriever", 
                  END: END
              },
         )
         workflow.add_conditional_edges(
-            
             "Retriever",
-            
             self._grade_documents,
-            
-            {"generator": "Generator", 
-             
-             "rewriter": "Rewriter"},
+            {"generator": "Generator", "rewriter": "Rewriter"},
         )
         workflow.add_edge("Generator", END)
-        
         workflow.add_edge("Rewriter", "WebSearch")
-        
         workflow.add_edge("WebSearch", "Generator")
-        
         return workflow
 
-    # ---------- Public Run ----------
-    def run(self, query: str, thread_id: str = "default_thread") -> str:
+    async def run(self, query: str, thread_id: str = "default_thread") -> str:
         """Run the workflow for a given query and return the final answer."""
-        result = self.app.invoke({"messages": [HumanMessage(content=query)]},
+        result = await self.app.ainvoke({"messages": [HumanMessage(content=query)]},
                                  config={"configurable": {"thread_id": thread_id}})
         return result["messages"][-1].content
 
 
 if __name__ == "__main__":
-    rag_agent = AgenticRAG()
-    answer = rag_agent.run("What is the price of iPhone 16?")
-    print("\nFinal Answer:\n", answer)
+    import asyncio
+    async def main():
+        rag_agent = AgenticRAG()
+        await rag_agent.async_init()
+        answer = await rag_agent.run("What is the price of iPhone 16?")
+        print("\nFinal Answer:\n", answer)
+    asyncio.run(main())
